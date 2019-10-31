@@ -10,6 +10,8 @@
 
 java虚拟机内存，是java虚拟机进行对象内存空间分配、垃圾回收的活动室，只有先了解java虚拟机内存才能在此基础上进一步了解对象内存分配、垃圾回收等活动。有别于真实物理机硬盘、主存、缓存、寄存器的存储模型，java虚拟机内存模型按照其存储模块负责的数据类型将其划分为如下图所示的模型：
 
+![java虚拟机内存模型](https://github.com/aworker/posts/blob/master/java/jvm/post1/jvm_memory_model.png)
+
 
 
 

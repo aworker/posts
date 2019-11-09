@@ -161,7 +161,7 @@ Caused by: java.lang.OutOfMemoryError: Metaspace
 
 虚拟机栈和本地方法栈，都是线程私有的，主要用来存储在线程运行过程中的局部变量、操作数栈、方法出入口等信息，这些信息是以栈帧的形式存储的，虚拟机栈和本地方法栈的区别就是一个存储java方法运行时的栈帧数据一个存储本地方法（native 关键字修饰的方法）运行时的栈帧数据。由于都是存储栈帧数据，两种栈的区别不是很大，甚至在HotSpot虚拟机中，直接把这两个合二为一，所以本小节把这两种栈合起来说。java程序在运行时的栈数据结构如下图：
 
-![运行时栈结构](https://github.com/aworker/posts/raw/master/java/jvm/post1/stack-model.png)
+![运行时栈结构](https://github.com/aworker/posts/raw/master/java/jvm/post1/stack-model.jpg)  
 
 在介绍堆时，我们曾说过几乎所有的对象都是在堆中创建的，这几乎中的特例就来自于栈，对象是可以在栈上创建，我们称为栈上分配。
 
@@ -258,7 +258,7 @@ public class StackOverFlowOOM {
 
 
 
-> 有任何不懂或者质疑的地方，都欢迎大家积极留言讨论，留言必会，一起学习进步。
+> 有任何不懂或者质疑的地方，都欢迎大家积极留言讨论，留言必回，一起学习进步。
 
 
 

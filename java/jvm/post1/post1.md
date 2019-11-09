@@ -1,6 +1,6 @@
 # java虚拟机实用、面试、装x指南之jvm内存模型
 
-有别与C/C++语言，java虚拟机解放了java程序员，使我们在开发过程中不必负责每个对象的出生和死亡，我们只管用new关键字创建对象，使用对象，对于不在使用的对象所占的内存空间的回收，完全交给java虚拟机来负责。在程序内存管理领域，java虚拟机即让我们避免成为
+有别于C/C++语言，java虚拟机解放了java程序员，使我们在开发过程中不必负责每个对象的出生和死亡，我们只管用new关键字创建对象，使用对象，对于不在使用的对象所占的内存空间的回收，完全交给java虚拟机来负责。在程序内存管理领域，java虚拟机即让我们避免成为
 分配对象内存，回收对象内存这样单调工作的奴隶；也让我们丧失了成为掌握对象内存空间管理“生杀大权”的皇帝，内存管理对我们越发的陌生和透明，一旦有内存泄露或者溢出以及涉及到虚拟机方面的性能调优，都会让我们手足无措。而我们的《java虚拟机实用、面试、装x指南》系列文章，力求用
 简单，生动，具体的讲述风格讲解java虚拟机的运作机制，让广大java开发人员得以管窥一二，在实际工作中、在面试找工作时、在饭后和同事吹哔时，都能得心应手，从容应对。鉴于java虚拟机知识体系的庞杂和深邃以及本员能力的限制，系列文章中难免有错误和不足，希望大家多多包涵。
 
@@ -15,7 +15,7 @@ java虚拟机内存，是java虚拟机进行对象内存空间分配、垃圾回
 ## 堆
 堆是各个线程共享的内存区域，是java对象内存分配和垃圾回收的主战场，几乎所有的对象都是在堆中创建的。根据*Java虚拟机规范（Java Virtual Machine Specification）* 的规则，Java堆可以处于物理上不连续的内存空间中，只要逻辑上是连续的即可。如果在堆中没有内存空间完成Java对象的内存分配时，将会抛出OutOfMemoryError（一下简称OOM）。
 
-关于堆的虚拟机参数最常见的两个是：
+关于堆的最常见虚拟机参数：
 + -Xms ：表示虚拟机堆的最小值，如 -Xms10M 表示堆的最小值为10MB
 + -Xmx ：表示虚拟机堆的最大值，如果 -Xmx100M 表示堆的最大值为100MB
 
@@ -94,6 +94,159 @@ public class ConstantsPool {
 在jdk7之前，程序在执行//2处代码之前常量池中没有"HelloJvm"这个字符串常量，//2处代码执行时，程序会在常量池中创建一个"HelloJvm"的字符串对象s1并返回，而常量池是在方法区的。那一个在堆中的s对象和方法区中的s1对象比较地址是否相同，当然会得到false。
 在jdk7及其以后的版本，程序在执行//2出代码时，发现常量池中同样没有"HelloJvm"这个对象，但因为常量池已经迁移到堆中，常量池不需要存储一个对象了，程序只是简单的把s这个对象的引用在常量池中存储了，此时s和s1指向的是同一个对象，结果当然是true。
 
+上面简单介绍了jdk7中常量池的变化，而在jdk8中方法整个方法区被放到了物理机的本地内存,同时也更名为元空间（MetaSpace）：
+
+![jdk8](https://github.com/aworker/posts/raw/master/java/jvm/post1/jvm_memory_model_1.8.png)
+
+
+jdk8及其以后的版本，元空间直接使用物理机的本地内存，在不加限制的情况下其最大值为本地内存的最大可用值。考虑到物理机上可能部署其它的应用服务，通常会给元空间加一个大小限制。
+
+关于元空间最常见的虚拟机参数是：
++ -XX:MetaspaceSize : 表示虚拟机元空间发生MetadataGC时的初始阈值,如 -XX:MetaspaceSize=10M 表示元空间在第一次到大10M时，会发生一次MetadataGC。
++ -XX:MaxMetaspaceSize ： 表示虚拟机元空间的最大值为MaxMetaspaceSize，如 -XX:MaxMetaspaceSize=15M 表示元空间的最大值为15M，再大就会发生OOM异常。
+
+关于元空间的的内存溢出模拟，我们需要借助CGLib来动态的创建类，先引入如下maven依赖：
+```aidl
+<dependency>
+    <groupId>cglib</groupId>
+    <artifactId>cglib-nodep</artifactId>
+    <version>3.3.0</version>
+</dependency>
+```
+
+具体代码如下：
+```aidl
+/**
+ * 虚拟机参数 -XX:MaxMetaspaceSize=10M 
+ * @description 元空间内存溢出
+ */
+public class MetaSpaceOOM {
+    public static void main(String[] args) {
+        BeanGenerator beanGenerator = new BeanGenerator();
+        List<Class> classes = new ArrayList<>();
+        for (int i=0; i<1000000000L;i++ ) {
+
+            beanGenerator.addProperty("id"+i, Integer.class);
+            Object aClass = beanGenerator.createClass();
+            classes.add((Class) aClass);
+
+        }
+    }
+}
+```
+
+执行结果为：
+```aidl
+Exception in thread "main" java.lang.IllegalStateException: Unable to load cache item
+	at net.sf.cglib.core.internal.LoadingCache.createEntry(LoadingCache.java:79)
+	at net.sf.cglib.core.internal.LoadingCache.get(LoadingCache.java:34)
+	at net.sf.cglib.core.AbstractClassGenerator$ClassLoaderData.get(AbstractClassGenerator.java:119)
+	at net.sf.cglib.core.AbstractClassGenerator.create(AbstractClassGenerator.java:294)
+	at net.sf.cglib.beans.BeanGenerator.createHelper(BeanGenerator.java:94)
+	at net.sf.cglib.beans.BeanGenerator.createClass(BeanGenerator.java:85)
+	at jvm.post1.MetaSpaceOOM.main(MetaSpaceOOM.java:19)
+Caused by: java.lang.OutOfMemoryError: Metaspace
+	at net.sf.cglib.core.AbstractClassGenerator.generate(AbstractClassGenerator.java:348)
+	at net.sf.cglib.core.AbstractClassGenerator$ClassLoaderData$3.apply(AbstractClassGenerator.java:96)
+	at net.sf.cglib.core.AbstractClassGenerator$ClassLoaderData$3.apply(AbstractClassGenerator.java:94)
+	at net.sf.cglib.core.internal.LoadingCache$2.call(LoadingCache.java:54)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+	at net.sf.cglib.core.internal.LoadingCache.createEntry(LoadingCache.java:61)
+	... 6 more
+```
+
+可以看到，引起IllegalStateException异常的正是因为"Metaspace"类型的OOM错误。具体原因为BeanGenerator对象通过createClass方法不断创建新的类，导致最大内存为10MB的元空间没办法存储类的信息而抛出异常。
+
+## 虚拟机栈和本地方法栈
+
+虚拟机栈和本地方法栈，都是线程私有的，主要用来存储在线程运行过程中的局部变量、操作数栈、方法出入口等信息，这些信息是以栈帧的形式存储的，虚拟机栈和本地方法栈的区别就是一个存储java方法运行时的栈帧数据一个存储本地方法（native 关键字修饰的方法）运行时的栈帧数据。由于都是存储栈帧数据，两种栈的区别不是很大，甚至在HotSpot虚拟机中，直接把这两个合二为一，所以本小节把这两种栈合起来说。java程序在运行时的栈数据结构如下图：
+
+![运行时栈结构](https://github.com/aworker/posts/raw/master/java/jvm/post1/stack-model.png)
+
+在介绍堆时，我们曾说过几乎所有的对象都是在堆中创建的，这几乎中的特例就来自于栈，对象是可以在栈上创建，我们称为栈上分配。
+
+```aidl
+/**
+ * 执行栈上分配的虚拟机参数  -XX:+DoEscapeAnalysis -XX:+EliminateAllocations -Xmx10M
+ * 不执行栈上分配的虚拟机参数  -XX:-DoEscapeAnalysis -XX:+EliminateAllocations -Xmx10M
+ * 
+ * 参数说明：
+ * DoEscapeAnalysis  ： 逃逸分析，对于本例来说逃逸分析可以判断出//1处创建的对象是否会被本方法外的方法获取到。
+ * EliminateAllocations ： 标量替换，对于本例来说，在逃逸分析的帮助下发现//1出的User对象不会逃逸出方法allo，那么消除User对象的堆内存分配，把它的字段改为一个个独立的局部变量（本例中是int类型的标量）存储在线程的栈中。
+ * 要模拟栈上分配，需要逃逸分析和标量替换两个功能都是开启的。
+ * @description 栈上分配
+ */
+public class StackAllocation {
+    static class User{
+        int i;
+    }
+
+    public static void allo() {
+        User user = new User(); //1
+        user.i = 4;
+    }
+
+    public static void main(String[] args) {
+        long startTime = System.currentTimeMillis();
+        for (int i = 0; i < 100000000L; i++) {
+            allo();
+        }
+        long endTime = System.currentTimeMillis();
+        System.out.println(endTime - startTime);
+    }
+}
+```
+
+用不同的虚拟机参数执行上面的代码时，会发现同样执行1亿次方法调用，栈上分配的执行时间明显比非栈上分配的执行时间短。简单的解释就是1亿个的User对象不是被分配在堆上，这样就避免了频繁的GC，对性能自然有很大提升。
+
+与栈相关的虚拟机参数主要有：
++ -Xss : 设置java线程栈的大小，如 -Xss100k 表示每个java线程栈的大小为100k。
+
+线程栈是用来存方法的栈帧的。线程栈越大其能调用的方法深度越大，运行如下代码可以印证此观点：
+
+```aidl
+/**
+ * 虚拟机参数 -Xss1000K
+ * @description 模拟栈内存溢出
+ */
+public class StackOverFlowOOM {
+    private static int num = 0;
+
+    public static void loop(){
+        num++;
+        loop();
+    }
+
+    public static void main(String[] args) {
+        try {
+            loop();
+        } catch (Throwable e) {
+            e.printStackTrace();
+            System.out.println(num);
+        }
+    }
+}
+```
+
+当Xss的值越大时，程序中的num变量在栈溢出异常时的值越大。jdk8中如果不指定Xss参数的大小，那么其默认值为1MB，这也从内存角度印证线程是一种昂贵的资源，即使简单的创建一个线程而不分配给其处理任务，其也要占用一些内存空间。
+
+
+## 程序计数器
+
+程序计数器是一块较小的内存空间，它可以看作是当前线程所执行的字节码的行号指示器，因为操作系统会分配给各个线程一些时间片来运行，当时间片用完后，就需要有程序计数器记录线程执行的位置，用来在线程重新获得时间片时能恢复到原来的执行位置。从程序计数器的用途得知，程序程序计数器也是线程私有的，而且也是唯一一个不会有OOM异常的虚拟机内存区域。
+
+
+
+#篇尾小节
+
+本篇主要简绍了java虚拟机在运行时的各个内存区域，简单介绍了它们的作用和内存溢出的方式。
+
+
+
+
+
+
+
 
 
 
@@ -108,4 +261,8 @@ public class ConstantsPool {
 > 有任何不懂或者质疑的地方，都欢迎大家积极留言讨论，留言必会，一起学习进步。
 
 
-程序计数器，唯一不会OOM
+
+<!--
+参考文献 ：
+http://lovestblog.cn/blog/2016/10/29/metaspace/ 
+-->

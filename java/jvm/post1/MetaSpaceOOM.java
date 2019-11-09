@@ -7,8 +7,7 @@ import java.util.List;
 
 /**
  * -XX:MaxMetaspaceSize=10M -XX:+PrintGC
- * @createtime 2019/11/3
- * @description 方法区内存溢出
+ * @description 元空间内存溢出
  */
 public class MetaSpaceOOM {
     public static void main(String[] args) {
